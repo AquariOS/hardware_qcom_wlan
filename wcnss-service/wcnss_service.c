@@ -74,8 +74,10 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define WCNSS_FACT_FILE "/data/vendor/wifi/WCN_FACTORY"
 #define WCNSS_DEVICE    "/dev/wcnss_wlan"
 #define WCNSS_CTRL      "/dev/wcnss_ctrl"
+#ifdef WCNSS_COPY_CONFIG
 #define WLAN_INI_FILE_DEST   "/data/vendor/wifi/WCNSS_qcom_cfg.ini"
 #define WLAN_INI_FILE_SOURCE "/vendor/etc/wifi/WCNSS_qcom_cfg.ini"
+#endif
 #define WCNSS_HAS_CAL_DATA\
 		"/sys/module/wcnsscore/parameters/has_calibrated_data"
 #define WLAN_DRIVER_ATH_DEFAULT_VAL "0"
@@ -306,6 +308,7 @@ void find_full_path(char *cur_dir, char *file_to_find, char *full_path)
 	chdir("..");
 }
 
+#ifdef WCNSS_COPY_CONFIG
 void setup_wlan_config_file()
 {
 	int rfd;
@@ -365,7 +368,7 @@ void setup_wlan_config_file()
 			ALOGE("Failed to get group wifi %s", strerror(errno));
 	}
 
-	property_set("wlan.driver.config", WLAN_INI_FILE_DEST);
+	property_set("vendor.wlan.driver.config", WLAN_INI_FILE_DEST);
 
 out:
 	close(rfd);
@@ -373,9 +376,11 @@ out:
 	return;
 
 out_nocopy:
-	property_set("wlan.driver.config", WLAN_INI_FILE_DEST);
+	property_set("vendor.wlan.driver.config", WLAN_INI_FILE_DEST);
 	return;
 }
+#endif
+
 unsigned int convert_string_to_hex(char* string)
 {
 	int idx;
@@ -406,36 +411,14 @@ void setup_wcnss_parameters(int *cal)
 #endif
 {
 	char msg[WCNSS_MAX_CMD_LEN];
-	char serial[PROPERTY_VALUE_MAX];
 	int fd, rc, pos = 0;
 	struct stat st;
-	unsigned int serial_num = 0;
 
 	fd = open(WCNSS_CTRL, O_WRONLY);
 	if (fd < 0) {
 		ALOGE("Failed to open %s : %s", WCNSS_CTRL, strerror(errno));
 		return;
 	}
-
-	rc = property_get("ro.wcnss.serialno", serial, "");
-	if (rc) {
-		serial_num = convert_string_to_hex(serial);
-		ALOGE("Serial Number is  %x", serial_num);
-
-		msg[pos++] = WCNSS_USR_SERIAL_NUM >> BYTE_1;
-		msg[pos++] = WCNSS_USR_SERIAL_NUM >> BYTE_0;
-		msg[pos++] = serial_num >> BYTE_3;
-		msg[pos++] = serial_num >> BYTE_2;
-		msg[pos++] = serial_num >> BYTE_1;
-		msg[pos++] = serial_num >> BYTE_0;
-
-		if (write(fd, msg, pos) < 0) {
-			ALOGE("Failed to write to %s : %s", WCNSS_CTRL,
-					strerror(errno));
-			goto fail;
-		}
-	}
-
 #if defined(WCNSS_QMI) || defined (WCNSS_QMI_OSS)
 	if (SUCCESS == nv_mac_addr)
 	{
@@ -514,7 +497,7 @@ fail:
 
 void setup_wlan_driver_ath_prop()
 {
-	property_set("wlan.driver.ath", WLAN_DRIVER_ATH_DEFAULT_VAL);
+	property_set("vendor.wlan.driver.ath", WLAN_DRIVER_ATH_DEFAULT_VAL);
 }
 
 #ifdef MDM_DETECT
@@ -756,7 +739,6 @@ static int setup_wcnss_qmi(void)
 	}
 
 	dlerror();
-
 	wcnss_init_qmi = dlsym(wcnss_qmi_handle, "wcnss_init_qmi");
 	if ((error = dlerror()) != NULL) {
 		ALOGE("Failed to resolve function: %s: %s",
@@ -805,7 +787,9 @@ int main(int argc, char *argv[])
 #endif
 #endif
 
+#ifdef WCNSS_COPY_CONFIG
 	setup_wlan_config_file();
+#endif
 
 #ifdef WCNSS_QMI_OSS
 	/* dlopen WCNSS QMI lib */
